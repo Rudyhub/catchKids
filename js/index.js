@@ -7,10 +7,15 @@ var Game = {
     prevent: {passive: false},
     isOver: false,
     score: 0,
-    clock: 30,
-    speed: 4,
+    clock: 0,
+    speed: 0,
     outed: 0,
-    runningKids: 3,
+    runningKids: 0,
+    level: {
+        scoreAdd: 0,
+        runningKids: 3,
+        speed: 4
+    },
     music: {
         bgsong: (function(){
             var audio = new Audio();
@@ -48,6 +53,8 @@ var Game = {
         _this.clock = 30;
         _this.score = 0;
         _this.isOver = false;
+        _this.speed = _this.level.speed;
+        _this.runningKids = _this.level.runningKids;
         _this.outed = 0;
         //恢复舞台
         _this.stage.innerHTML = '';
@@ -61,7 +68,7 @@ var Game = {
         _this.initScene1();
         _this.initScene2();
         //添加动画style，初始化速度
-        speed = _this.speed;
+        speed = _this.level.speed;
         style = document.createElement('style');
         document.head.appendChild(style);
         Object.defineProperty(_this, 'speed', {
@@ -77,21 +84,29 @@ var Game = {
         _this.enterScene(0)
     },
     initScene0: function(){
-        var _this, btn1, nickname, user, pop, btn2;
+        var _this, scene, btn1, nickname, user, pop, btn2, btn3, levelDom, levelItems;
         _this = this;
+        scene = _this.scenes[0];
         user = window.localStorage.getItem('nickname');
-        _this.scenes[0].className = 'scene scene1';
-        _this.scenes[0].innerHTML = '<img class="title-img" src="img/title.png" alt="标题图片：逃課大作戰" draggable="false">\
+        scene.className = 'scene scene1';
+        scene.innerHTML = '<img class="title-img" src="img/title.png" alt="标题图片：逃課大作戰" draggable="false">\
         <img class="kid01" src="img/kid01.png" alt="" draggable="false">\
         <img class="teacher" src="img/teacher.png" alt="" draggable="false">\
         <img class="btn01" src="img/btn01.png" alt="" draggable="false">\
         <input class="nickname" type="text" name="nickname" placeholder="輸入暱稱">\
-        <span class="btn02">排行榜</span>\
+        <div class="btns"><span class="btn02">排行榜</span><span class="btn03">選擇難度</span></div>\
         <div class="logobar"><img class="logo" src="img/logo.png" alt="" draggable="false"></div>';
 
-        btn1 = _this.scenes[0].querySelector('.btn01');
-        btn2 = _this.scenes[0].querySelector('.btn02');
-        nickname = _this.scenes[0].querySelector('.nickname');
+        levelDom = document.createElement('div');
+        levelDom.className = 'level-list popup-inner';
+        levelDom.innerHTML = '<div class="level-item" data-level="1">初&nbsp;&nbsp;級</div>' +
+            '<div class="level-item" data-level="2">中&nbsp;&nbsp;級</div>' +
+            '<div class="level-item" data-level="3">高&nbsp;&nbsp;級</div>';
+
+        btn1 = scene.querySelector('.btn01');
+        btn2 = scene.querySelector('.btn02');
+        btn3 = scene.querySelector('.btn03');
+        nickname = scene.querySelector('.nickname');
         nickname.value = user;
         pop = utils.popup();
         function enterFn(){
@@ -106,6 +121,7 @@ var Game = {
                 }
                 if(window.localStorage.getItem('nickname') !== nick){
                     window.localStorage.setItem('nickname', nick);
+                    window.localStorage.setItem(nick, '0');
                     _this.sendMsg('name='+nick, function () {
                         _this.getRank();
                     });
@@ -122,13 +138,42 @@ var Game = {
         btn2.onclick = function () {
             _this.showRank();
         }
+        levelItems = levelDom.querySelectorAll('.level-item');
+        for(var i=0; i<levelItems.length; i++){
+            levelItems[i].onclick = function () {
+                switch (this.getAttribute('data-level')) {
+                    case '2':
+                        _this.level.speed = 3.25;
+                        _this.level.runningKids = 5;
+                        _this.level.scoreAdd = 5;
+                        break;
+                    case '3':
+                        _this.level.speed = 2.75;
+                        _this.level.runningKids = 5;
+                        _this.level.scoreAdd = 10;
+                        break;
+                    default:
+                        _this.level.speed = 4;
+                        _this.level.runningKids = 4;
+                        _this.level.scoreAdd = 0
+                }
+                pop.hide();
+            }
+        }
+        btn3.onclick = function () {
+            pop.show(levelDom);
+        }
     },
     showRules: function(fn){
         var pop, btn;
         pop= utils.popup(null, this.stage);
         pop.onhide = fn;
         pop.show('<div class="popup-inner">' +
-            '<p style="text-indent: 2em;">30秒内，抓住正在逃跑的熊孩子並拖到底部罰站，每抓住一個最靠頂部的加15分，中間的加10分，底部的加5分。如果沒抓住，每逃出教室一個將扣5分。</p>' +
+            '<p style="text-indent: 2em;">30秒内，抓住正在逃跑的熊孩子並拖到底部罰站，每抓住一個<br>' +
+            '靠上的孩子加分：<br>&nbsp;&nbsp;&nbsp;&nbsp;初级15、中级20、高级25分<br>' +
+            '中間的孩子加分：<br>&nbsp;&nbsp;&nbsp;&nbsp;初级10、中级15、高级20分<br>' +
+            '底部的孩子加分：<br>&nbsp;&nbsp;&nbsp;&nbsp;初级5、中级10、高级15分<br>' +
+            '如果沒抓住，每逃出教室一個將初、中级扣5分，高级扣10分。</p>' +
             '<img id="i-see" class="btn-i-see" src="img/btn-i-see.png" style="height: 2.5em;display: block;margin: 0 auto;">'+
             '</div>');
         btn = document.getElementById('i-see');
@@ -138,7 +183,7 @@ var Game = {
         }
     },
     initScene1: function(){
-        var _this, scene, scoreEl, score, scoreAdd, scoreAddTimer, clockEl, musicBtn, clock;
+        var _this, scene, scoreEl, score, scoreAdd, scoreAddTimer, clockEl, musicBtn, clock, rules;
         _this = this;
         scene = _this.scenes[1];
         window.localStorage.setItem('bgsong', 'play');
@@ -152,6 +197,11 @@ var Game = {
         <img class="door02" src="img/door.png" draggable="false">\
         <img class="teacher02" src="img/teacher.png" draggable="false">\
         <div class="score-add"></div>';
+
+        rules = scene.querySelector('.kid-head');
+        rules.onclick = function(){
+            _this.showRules();
+        };
 
         clockEl = scene.querySelector('.clock');
         clock = _this.clock;
@@ -207,7 +257,7 @@ var Game = {
         scene.innerHTML = '<img class="light" src="img/light.png">\
         <div class="level-box" style="width: 84%;height: '+(Game.stageWidth * 0.78)+'px;">\
             <img class="level-num" src="img/level-2.png"><br>\
-            <span class="level-score" style="font-size: '+(Game.stageWidth * .06)+'px;">300分</span>\
+            <span class="level-score" style="font-size: '+(Game.stageWidth * .06)+'px;"></span>\
             <img class="level-text" src="img/level-text1.png" style="height: '+(Game.stageWidth * .07)+'px">\
         </div>\
         <img class="show-rank" src="img/rank-title.png">\
@@ -310,9 +360,10 @@ var Game = {
         pop.show(box, true);
     },
     getRank: function(success, fail){
-        var xhr, res
+        var xhr, res, nick, your
+        nick = window.localStorage.getItem('nickname');
         xhr = new XMLHttpRequest();
-        xhr.open('get', 'http://localhost/student_catch_game/api/post.php?name=' + window.localStorage.getItem('nickname'), true);
+        xhr.open('get', 'api/post.php?name=' + nick, true);
         xhr.onreadystatechange = function () {
             if(xhr.readyState === 4) {
                 if (xhr.status === 200) {
@@ -322,7 +373,10 @@ var Game = {
                         if(fail) fail();
                         return;
                     }
-                    window.sessionStorage.setItem(window.localStorage.getItem('nickname'), res.results[res.results.length - 1].score);
+                    your = res.results[res.results.length - 1]
+                    if(your.name === nick){
+                        window.localStorage.setItem(nick, your.score);
+                    }
                     if(success) success(res)
                 }else{
                     if(fail) fail()
@@ -332,7 +386,7 @@ var Game = {
         xhr.send();
     },
     createKid: function(fn){
-        var _this, kid, rand, clientX, clientY, className;
+        var _this, kid, rand, clientX, clientY, className, addScore;
         _this = this;
         kid = document.createElement('div');
         rand = Math.floor(Math.random()*3.5 + 1);
@@ -367,13 +421,15 @@ var Game = {
             if((this.offsetTop + _this.kidWidth) / _this.stage.offsetHeight > .9){
                 this.style.bottom = '0';
                 this.style.top = '';
+                addScore = 0;
                 if(/student1/.test(className)){
-                    _this.score += 15
+                    addScore = 15;
                 } else if(/student2/.test(className)){
-                    _this.score += 10
+                    addScore = 10;
                 } else {
-                    _this.score += 5
+                    addScore = 5;
                 }
+                _this.score += (addScore + _this.level.scoreAdd);
                 _this.music.play(_this.music.score);
                 if(fn) fn()
             } else {
@@ -384,7 +440,7 @@ var Game = {
             if(/running-path/.test(e.animationName)){
                 _this.outed++;
                 if(_this.score > 0){
-                    _this.score -= 5;
+                    _this.score -= 5*(_this.level.scoreAdd / 5);
                 }
                 rand = Math.floor(Math.random()*3.5 + 1);
                 className = 'student running student' + rand;
@@ -409,7 +465,7 @@ var Game = {
             if(_this.clock <= 0) {
                 var runningKids, len, i;
                 clearInterval(_this.clockTimer);
-                runningKids = document.querySelectorAll('.running');
+                runningKids = document.querySelectorAll('.student');
                 len = runningKids.length;
                 for(i=0; i<len; i++){
                     runningKids[i].className = 'student';
@@ -436,7 +492,8 @@ var Game = {
                 _this.score = 0;
                 _this.isOver = false;
                 _this.outed = 0;
-                _this.speed = 4;
+                _this.speed = _this.level.speed;
+                _this.runningKids = _this.level.runningKids;
                 var kids = _this.scenes[1].querySelectorAll('.student');
                 for(var i=0, len=kids.length; i<len; i++){
                     _this.scenes[1].removeChild(kids[i]);
@@ -457,7 +514,7 @@ var Game = {
     },
     sendMsg: function(params, callback, fail){
         var xhr = new XMLHttpRequest();
-        xhr.open('post', 'http://localhost/student_catch_game/api/post.php', true);
+        xhr.open('post', 'api/post.php', true);
         xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
         xhr.onreadystatechange = function () {
             if(xhr.readyState === 4){
@@ -473,12 +530,14 @@ var Game = {
     gameOver: function(){
         var nick, score;
         nick = window.localStorage.getItem('nickname');
-        score = parseInt(window.sessionStorage.getItem(nick));
+        score = parseInt(window.localStorage.getItem(nick));
         this.updateScene2();
         utils.popup(null, this.stage).show(this.scenes[2], true);
-        if(this.score > score){
-            window.sessionStorage.setItem(nick, this.score);
-            this.sendMsg('name='+nick+'&score='+this.score);
+        if(this.score > score || isNaN(score)){
+            window.localStorage.setItem(nick, this.score);
+            this.sendMsg('name='+nick+'&score='+this.score, function(){
+                utils.popup('<div class="popup-inner">success!</div>');
+            });
         }
     },
     restart: function(index){
@@ -487,6 +546,9 @@ var Game = {
 };
 
 !function main(){
+    if(!('ontouchstart' in document)){
+        return utils.popup().show('<span class="popup-inner">當前設備不支持<br>請在手機上玩</span>', true);
+    }
     var medias = ['bg01.jpg', 'bg02.jpg', 'btn01.png', 'btn-again.png', 'btn-share.png', 'btn-back.png', 'btn-back-home.png', 'btn-i-see.png',
             'cover.jpg', 'door.png', 'kid01.png', 'kid-head.png',
             'level-1.png', 'level-2.png', 'level-3.png', 'level-4.png', 'level-bg.png', 'light.png',
