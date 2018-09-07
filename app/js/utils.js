@@ -1,4 +1,99 @@
 var utils = {
+    scroll: function(el, direction, preventKeys) {
+        preventKeys = preventKeys || [];
+        var isTouch, events, start, end, startTop, prev, speed, prevent, scroll, client, len, i, timer
+
+        isTouch = 'ontouchstart' in document
+        events = ['mousedown', 'mousemove', 'mouseup']
+        start = 0
+        end = 0
+        startTop = 0
+        prev = 0
+        speed = 0
+        prevent = {passive: false}
+        scroll = 'scrollTop'
+        client = 'clientY'
+        len = preventKeys.length
+
+        if (isTouch) {
+            events[0] = 'touchstart'
+            events[1] = 'touchmove'
+            events[2] = 'touchend'
+        }
+
+        if (direction && direction.toLowerCase() === 'x') {
+            scroll = 'scrollLeft'
+            client = 'clientX'
+        }
+
+        function startFn (e) {
+            for (i = 0; i < len; i++) {
+                if (e[preventKeys[i]]) return false
+            }
+            start = isTouch ? e.targetTouches[0][client] : e[client]
+            end = start
+            startTop = el[scroll]
+            prev = start
+            el.addEventListener(events[1], moveFn, prevent)
+            document.addEventListener(events[2], endFn)
+        }
+
+        function moveFn (e) {
+            e.preventDefault()
+            end = isTouch ? e.targetTouches[0][client] : e[client]
+            speed = end - prev
+            prev = end
+            el[scroll] = startTop + (start - end)
+        }
+
+        function endFn () {
+            el.removeEventListener(events[1], moveFn, prevent)
+            document.removeEventListener(events[2], endFn)
+            easeOut(Math.abs(speed), end - start, end - start < 0 ? 1 : -1)
+        }
+
+        function wheel (e) {
+            for (i = 0; i < len; i++) {
+                if (e[preventKeys[i]]) {
+                    return false
+                }
+            }
+            var dir = e.wheelDelta < 0 ? 1 : -1
+            el[scroll] += dir * 10
+            easeOut(10, 6, dir)
+        }
+
+        function easeOut (d, dis, dir) {
+            function play () {
+                d *= 0.9
+                cancelAnimationFrame(timer)
+                timer = requestAnimationFrame(play)
+                if (d < 1) cancelAnimationFrame(timer)
+                el[scroll] += d * dir
+            }
+            if (Math.abs(dis) > 5) {
+                cancelAnimationFrame(timer)
+                timer = requestAnimationFrame(play)
+            }
+        }
+
+        function bind () {
+            el.addEventListener(events[0], startFn)
+            if (!isTouch) el.addEventListener('mousewheel', wheel)
+        }
+
+        function unbind () {
+            el.removeEventListener(events[0], startFn)
+            el.addEventListener('mousewheel', wheel)
+        }
+
+        bind();
+
+        return {
+            on: bind,
+            off: unbind
+        }
+    },
     loadMedia: function(arr, fn){
         var i = 0, len = arr.length, count = 0;
         for(; i<len; i++){
@@ -33,7 +128,8 @@ var utils = {
         var _this = this,
             div = document.createElement('div'),
             cell = document.createElement('div'),
-            backObj = {};
+            backObj = {},
+            preventHide = false;
 
         _this.css(div, {
             position: 'absolute',
@@ -56,13 +152,14 @@ var utils = {
 
         div.appendChild(cell);
         div.onclick = function (ev) {
-            var target = ev.target
-            if(target === div || target === cell || /popup-close/.test(target.className)){
+            var target = ev.target;
+            if((!preventHide && (target === div || target === cell)) || /popup-close/.test(target.className)){
                 context.removeChild(div);
                 if(backObj.onhide) backObj.onhide();
             }
         };
-        backObj.show = function (html) {
+        backObj.show = function (html, prevent) {
+            preventHide = prevent;
             if(context.contains(div)) return;
             context.appendChild(div);
             cell.innerHTML = '';
