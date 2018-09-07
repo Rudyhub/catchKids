@@ -1,4 +1,5 @@
 var stage = document.getElementById('stage');
+
 var Game = {
     stage: stage,
     stageWidth: stage.offsetWidth,
@@ -6,8 +7,10 @@ var Game = {
     prevent: {passive: false},
     isOver: false,
     score: 0,
-    limit: 30,
-    clock: 0,
+    clock: 30,
+    speed: 4,
+    outed: 0,
+    runningKids: 3,
     music: {
         bgsong: (function(){
             var audio = new Audio();
@@ -31,92 +34,108 @@ var Game = {
             audio.pause();
             audio.currentTime = 0;
             var t = setTimeout(function(){
-                clearTimeout(t)
+                clearTimeout(t);
                 audio.play();
             }, 20);
         }
     },
-    runningKids: 3,
-    outed: 0,
     scenes: [document.createElement('div'), document.createElement('div'), document.createElement('div')],
-    style: (function(){
-        var style = document.createElement('style');
-        document.head.appendChild(style);
-        return style
-    })(),
     init: function() {
-        var _this = this, reg = /^rank-/;
+        var _this = this, reg = /^rank-/, speed, style;
         //初始化一些值
         _this.stageWidth = _this.stage.offsetWidth;
         _this.kidWidth = _this.stageWidth * .24;
-        _this.clock = _this.limit;
+        _this.clock = 30;
         _this.score = 0;
         _this.isOver = false;
         _this.outed = 0;
         //恢复舞台
         _this.stage.innerHTML = '';
         //阻止body的默认事件
-        // document.body.addEventListener('touchstart', docStartFn, _this.prevent)
-        // function docStartFn(e){
-        //     e.preventDefault()
-        // }
         document.body.addEventListener('touchmove', docMoveFn, _this.prevent);
         function docMoveFn(e){
-            if(!reg.test(e.target.className)){
-                e.preventDefault();
-            }
+            e.preventDefault();
         }
         //准备场景
         _this.initScene0();
         _this.initScene1();
         _this.initScene2();
-        //添加动画style，初始速度为4s
-        _this.speedup(4);
+        //添加动画style，初始化速度
+        speed = _this.speed;
+        style = document.createElement('style');
+        document.head.appendChild(style);
+        Object.defineProperty(_this, 'speed', {
+            set: function(v){
+                if(v !== speed){
+                    speed = v;
+                    style.innerText = '.student{-webkit-animation-duration: '+speed+'s;-moz-animation-duration: '+speed+'s;-o-animation-duration: '+speed+'s;animation-duration: '+speed+'s;}';
+                }
+            },
+            get: function () {return speed}
+        });
+        //显示第一个场景
+        _this.enterScene(0)
     },
     initScene0: function(){
-        var _this, btn, nickname, pop;
+        var _this, btn1, nickname, user, pop, btn2;
         _this = this;
+        user = window.localStorage.getItem('nickname');
         _this.scenes[0].className = 'scene scene1';
         _this.scenes[0].innerHTML = '<img class="title-img" src="img/title.png" alt="标题图片：逃課大作戰" draggable="false">\
         <img class="kid01" src="img/kid01.png" alt="" draggable="false">\
         <img class="teacher" src="img/teacher.png" alt="" draggable="false">\
         <img class="btn01" src="img/btn01.png" alt="" draggable="false">\
         <input class="nickname" type="text" name="nickname" placeholder="輸入暱稱">\
+        <span class="btn02">排行榜</span>\
         <div class="logobar"><img class="logo" src="img/logo.png" alt="" draggable="false"></div>';
 
-        btn = _this.scenes[0].querySelector('.btn01');
+        btn1 = _this.scenes[0].querySelector('.btn01');
+        btn2 = _this.scenes[0].querySelector('.btn02');
         nickname = _this.scenes[0].querySelector('.nickname');
-        nickname.value = window.localStorage.getItem('nickname');
+        nickname.value = user;
         pop = utils.popup();
         function enterFn(){
             var nick = nickname.value.trim();
             if(!nick){
                 pop.show('<span class="popup-inner">未輸入暱稱</span>');
+                nickname.focus();
             } else {
-                if(window.localStorage.getItem('nickname')){
-                    enterScene1();
-                }else{
-                    Game.showRules(enterScene1);
+                _this.enterScene(1);
+                if(window.localStorage.getItem('bgsong')){
+                    _this.music.bgsong.play();
                 }
-                function enterScene1 (){
+                if(window.localStorage.getItem('nickname') !== nick){
                     window.localStorage.setItem('nickname', nick);
-                    _this.enterScene(1);
-                    if(window.localStorage.getItem('bgsong')){
-                        _this.music.bgsong.play();
-                    }
+                    _this.sendMsg('name='+nick, function () {
+                        _this.getRank();
+                    });
                 }
-                //TODO  提交后台
             }
         }
-        btn.onclick = enterFn;
+        btn1.onclick = enterFn;
         nickname.onkeydown = function (e) {
-            if(e.keyCode === 13) enterFn();
+            if(e.keyCode === 13) {
+                enterFn();
+                nickname.blur();
+            }
+        };
+        btn2.onclick = function () {
+            _this.showRank();
         }
     },
     showRules: function(fn){
-        var pop = utils.popup(null, this.stage);
+        var pop, btn;
+        pop= utils.popup(null, this.stage);
         pop.onhide = fn;
-        pop.show('<div class="popup-inner">30秒内，抓住正在逃跑的熊孩子並拖到底部罰站，每抓住一個最靠頂部的加15分，中間的加10分，底部的加5分。如果沒抓住，每逃出教室一個將扣5分。</div>');
+        pop.show('<div class="popup-inner">' +
+            '<p style="text-indent: 2em;">30秒内，抓住正在逃跑的熊孩子並拖到底部罰站，每抓住一個最靠頂部的加15分，中間的加10分，底部的加5分。如果沒抓住，每逃出教室一個將扣5分。</p>' +
+            '<img id="i-see" class="btn-i-see" src="img/btn-i-see.png" style="height: 2.5em;display: block;margin: 0 auto;">'+
+            '</div>');
+        btn = document.getElementById('i-see');
+        btn.onclick = function () {
+            pop.hide();
+            window.localStorage.setItem('isee', '1')
+        }
     },
     initScene1: function(){
         var _this, scene, scoreEl, score, scoreAdd, scoreAddTimer, clockEl, musicBtn, clock;
@@ -127,7 +146,7 @@ var Game = {
         scene.draggable = false;
         scene.innerHTML = '<img class="kid-head" src="img/kid-head.png" draggable="false">\
         <div class="score" draggable="false">0</div>\
-        <div class="clock" draggable="false">倒計時：'+_this.limit+'s</div>\
+        <div class="clock" draggable="false">倒計時：'+_this.clock+'s</div>\
         <div class="music-btn" draggable="false"></div>\
         <img class="door01" src="img/door.png" draggable="false">\
         <img class="door02" src="img/door.png" draggable="false">\
@@ -140,7 +159,10 @@ var Game = {
             set: function (v) {
                 if(v !== clock){
                     clock = v;
-                    clockEl.innerHTML = '倒計時：'+ v +'s'
+                    clockEl.innerHTML = '倒計時：'+ v +'s';
+                    if(v % 5 === 0 && _this.speed > 1){
+                        _this.speed -= .25;
+                    }
                 }
             },
             get: function () {
@@ -179,7 +201,7 @@ var Game = {
         };
     },
     initScene2: function(){
-        var _this, scene, light, lbox, lnum, lscore, ltext, showRank, again, share;
+        var _this, scene, light, lbox, lnum, lscore, ltext, showRank, again, back,share;
         _this = this;
         scene = _this.scenes[2];
         scene.innerHTML = '<img class="light" src="img/light.png">\
@@ -191,6 +213,7 @@ var Game = {
         <img class="show-rank" src="img/rank-title.png">\
         <div class="rank-below-text" style="font-size: '+(Game.stageWidth * .04)+'px">點擊查看</div>\
         <img class="btn-again" src="img/btn-again.png">\
+        <img class="btn-back-home" src="img/btn-back-home.png">\
         <img class="btn-share" src="img/btn-share.png">\
         <img class="logo2" src="img/logo.png">';
 
@@ -201,6 +224,7 @@ var Game = {
         ltext = scene.querySelector('.level-text');
         showRank = scene.querySelector('.show-rank');
         again = scene.querySelector('.btn-again');
+        back = scene.querySelector('.btn-back-home');
         share = scene.querySelector('.btn-share');
         _this.updateScene2 = function () {
             if(_this.score >= 600) {
@@ -232,59 +256,80 @@ var Game = {
         again.onclick = function () {
             _this.restart();
         };
+        back.onclick = function () {
+            _this.restart(0);
+        };
         share.onclick = function () {
             utils.share();
         }
     },
     updateScene2: null,
     showRank: function(){
-        var pop, box, xhr, items, len, i, html;
+        var _this, pop, box, items, len, i, html, nick, last;
+        _this = this;
         pop = utils.popup(null, this.stage);
         box = document.createElement('div');
+        nick = window.localStorage.getItem('nickname');
+        _this.getRank(function(res){
+                box.className = 'rank';
+                items = res.results;
+                len = items.length;
+                last = len - 1;
+                html = '';
+                if(items[last].name === nick){
+                    html += '<div class="rank-item-title">你當前排行</div>\
+                    <div class="rank-item rank-user">\
+                        <div class="rank-num">' + items[last].rank + '</div>\
+                        <div class="rank-nick">' + items[last].name + '</div>\
+                        <div class="rank-score">' + items[last].score + '分</div>\
+                    </div>';
+                    len = last;
+                }
+                html += '<div class="rank-item-title">排行榜TOP20</div>';
+
+                for (i = 0; i < len; i++) {
+                    html += '<div class="rank-item rank-item-'+items[i].rank+'">\
+                        <div class="rank-num">' + items[i].rank + '</div>\
+                        <div class="rank-nick">' + items[i].name + '</div>\
+                        <div class="rank-score">' + items[i].score + '分</div>\
+                    </div>';
+                }
+                box.innerHTML = '<img class="rank-title" src="img/rank-title.png">\
+                        <div class="rank-body" style="height: ' + (_this.stage.offsetHeight * .6) + 'px;">\
+                            <div class="rank-list">' + html + '</div>\
+                        </div>\
+                        <img class="rank-back popup-close" src="img/btn-back.png">';
+                utils.scroll(box.querySelector('.rank-list'));
+            },
+            function(){
+                box.className = 'popup-inner';
+                box.innerHTML = '<div>加載失敗，稍後重試！</div><img class="rank-back popup-close" src="img/btn-back.png">';
+        });
+        box.className = 'popup-inner loading-icon';
+        box.innerHTML = 'loading...';
+        pop.show(box, true);
+    },
+    getRank: function(success, fail){
+        var xhr, res
         xhr = new XMLHttpRequest();
-        xhr.open('get', 'test.json', true);
+        xhr.open('get', 'http://localhost/student_catch_game/api/post.php?name=' + window.localStorage.getItem('nickname'), true);
         xhr.onreadystatechange = function () {
             if(xhr.readyState === 4) {
                 if (xhr.status === 200) {
-                    try {
-                        items = typeof xhr.response === 'object' ? xhr.response : JSON.parse(xhr.response);
-                    } catch (e) {
-                        box.innerHTML = '加載失敗，稍後重試！';
+                    try{
+                        res = typeof xhr.response === 'object' ? xhr.response : JSON.parse(xhr.response);
+                    }catch (e) {
+                        if(fail) fail();
                         return;
                     }
-                    if (items.code === 0) {
-                        box.className = 'rank';
-                        items = items.data;
-                        items.sort(function(a, b){
-                            return b.score - a.score
-                        });
-                        len = items.length;
-                        html = '';
-                        for (i = 0; i < len; i++) {
-                            html += '<div class="rank-item">\
-                            <div class="rank-num">' + (i + 1) + '</div>\
-                            <div class="rank-nick">' + items[i].nickname + '</div>\
-                            <div class="rank-score">' + items[i].score + '分</div>\
-                        </div>';
-                        }
-                        box.innerHTML = '<img class="rank-title" src="img/rank-title.png">\
-                            <div class="rank-body" style="height: ' + (window.innerHeight * .6) + 'px;">\
-                                <div class="rank-list">' + html + '</div>\
-                            </div>\
-                            <img class="rank-back popup-close" src="img/back.png">';
-                    } else {
-                        box.innerHTML = '加載失敗，稍後重試！';
-                    }
+                    window.sessionStorage.setItem(window.localStorage.getItem('nickname'), res.results[res.results.length - 1].score);
+                    if(success) success(res)
                 }else{
-                    box.className = 'popup-inner';
-                    box.innerHTML = '加載失敗，稍後重試！';
+                    if(fail) fail()
                 }
             }
         };
         xhr.send();
-        box.className = 'popup-inner loading-icon';
-        box.innerHTML = 'loading...';
-        pop.show(box);
     },
     createKid: function(fn){
         var _this, kid, rand, clientX, clientY, className;
@@ -338,7 +383,7 @@ var Game = {
         function anmFn(e) {
             if(/running-path/.test(e.animationName)){
                 _this.outed++;
-                if(_this.score > 5){
+                if(_this.score > 0){
                     _this.score -= 5;
                 }
                 rand = Math.floor(Math.random()*3.5 + 1);
@@ -350,7 +395,7 @@ var Game = {
         return kid
     },
     addKids: function(scene){
-        var _this, kidNum, kidTimer, clockTimer;
+        var _this, kidNum, kidTimer;
         _this = this;
         kidNum = 0;
         kidTimer = setInterval(function () {
@@ -358,12 +403,12 @@ var Game = {
             if(kidNum > _this.runningKids) clearInterval(kidTimer);
             addKid()
         }, 300);
-        this.isOver = false;
-        clockTimer = setInterval(function () {
+        _this.isOver = false;
+        _this.clockTimer = setInterval(function () {
             _this.clock--;
             if(_this.clock <= 0) {
                 var runningKids, len, i;
-                clearInterval(clockTimer);
+                clearInterval(_this.clockTimer);
                 runningKids = document.querySelectorAll('.running');
                 len = runningKids.length;
                 for(i=0; i<len; i++){
@@ -373,9 +418,6 @@ var Game = {
                 _this.isOver = true
                 _this.gameOver()
             }
-            if (_this.clock > 0 && _this.clock % 5 === 0){
-                _this.speedup(_this.clock/_this.limit * 2+2)
-            }
         }, 1000);
         function addKid() {
             scene.appendChild(_this.createKid(function(){
@@ -383,50 +425,69 @@ var Game = {
             }))
         }
     },
-    speedup: function(speed){
-        speed = speed || 4;
-        this.style.innerText = '.student{\
-            -webkit-animation-duration: '+speed+'s;\
-            -moz-animation-duration: '+speed+'s;\
-            -o-animation-duration: '+speed+'s;\
-            animation-duration: '+speed+'s;\
-        }';
-    },
     enterScene: function(index){
-        this.stage.innerHTML = '';
-        this.stage.appendChild(this.scenes[index]);
+        var _this = this;
+        _this.stage.innerHTML = '';
+        _this.stage.appendChild(_this.scenes[index]);
         switch (index) {
             case 1:
-                var kids = this.scenes[1].querySelectorAll('.student');
+                //复原场景值
+                _this.clock = 30;
+                _this.score = 0;
+                _this.isOver = false;
+                _this.outed = 0;
+                _this.speed = 4;
+                var kids = _this.scenes[1].querySelectorAll('.student');
                 for(var i=0, len=kids.length; i<len; i++){
-                    this.scenes[1].removeChild(kids[i]);
+                    _this.scenes[1].removeChild(kids[i]);
                 }
-                this.addKids(this.scenes[1]);
+                if(_this.clockTimer) clearInterval(_this.clockTimer);
+                //重新进入场景
+                if(window.localStorage.getItem('isee')){
+                    _this.addKids(_this.scenes[1]);
+                }else{
+                    _this.showRules(function () {
+                        _this.addKids(_this.scenes[1]);
+                    });
+                }
                 break;
             default:
-                this.scenes[0].classList.add('on');
+                _this.scenes[0].classList.add('on');
         }
     },
-    gameOver(){
+    sendMsg: function(params, callback, fail){
+        var xhr = new XMLHttpRequest();
+        xhr.open('post', 'http://localhost/student_catch_game/api/post.php', true);
+        xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+        xhr.onreadystatechange = function () {
+            if(xhr.readyState === 4){
+                if(xhr.status === 200){
+                    if(callback) callback(xhr.response);
+                }else{
+                    if(fail) fail();
+                }
+            }
+        };
+        xhr.send(params);
+    },
+    gameOver: function(){
+        var nick, score;
+        nick = window.localStorage.getItem('nickname');
+        score = parseInt(window.sessionStorage.getItem(nick));
         this.updateScene2();
-        utils.popup(null, this.stage).show(this.scenes[2]);
-        window.localStorage.setItem('score', this.score);
+        utils.popup(null, this.stage).show(this.scenes[2], true);
+        if(this.score > score){
+            window.sessionStorage.setItem(nick, this.score);
+            this.sendMsg('name='+nick+'&score='+this.score);
+        }
     },
-    restart: function(){
-        this.clock = this.limit;
-        this.score = 0;
-        this.isOver = false;
-        this.outed = 0;
-        this.enterScene(1);
-    },
-    start: function(){
-        this.init();
-        this.enterScene(0)
+    restart: function(index){
+        this.enterScene(typeof index !== 'undefined' ? index : 1);
     }
 };
 
-function main(){
-    var medias = ['back.png','bg01.jpg', 'bg02.jpg', 'btn01.png', 'btn-again.png', 'btn-share.png',
+!function main(){
+    var medias = ['bg01.jpg', 'bg02.jpg', 'btn01.png', 'btn-again.png', 'btn-share.png', 'btn-back.png', 'btn-back-home.png', 'btn-i-see.png',
             'cover.jpg', 'door.png', 'kid01.png', 'kid-head.png',
             'level-1.png', 'level-2.png', 'level-3.png', 'level-4.png', 'level-bg.png', 'light.png',
             'level-text1.png', 'level-text2.png', 'level-text3.png', 'level-text4.png','logo.png',
@@ -438,7 +499,6 @@ function main(){
     }
     medias.push('./audio/bg.mp3', './audio/win.mp3', './audio/score.mp3');
     utils.ready(medias, function () {
-        Game.start();
+        Game.init();
     })
-}
-main();
+}();
