@@ -93,20 +93,21 @@ body{
     right: 0;
     margin: 0 auto;
 }
-.btn02{
-    color: #fff;
-    cursor: pointer;
+.btns{
     position: absolute;
-    width: 3.5em;
-    left: 0;
-    right: 0;
+    width: 100%;
     bottom: 8%;
-    margin: 0 auto;
-    text-align: center;
-    border-bottom: 1px dashed;
-    font-weight: bolder;
-    z-index: 3;
+    color: #fff;
     opacity: 0;
+    text-align: center;
+    z-index: 3;
+}
+.btn02,
+.btn03{
+    cursor: pointer;
+    border-bottom: 1px dashed;
+    margin: 0 1em;
+    font-weight: bolder;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
@@ -138,7 +139,7 @@ body{
     animation:  fade-in .5s 1.5s, beating 1s 2s linear infinite;
 }
 .on .nickname,
-.on .btn02{
+.on .btns{
     -webkit-animation: fade-in 1s 1.5s forwards;
     -o-animation: fade-in 1s 1.5s forwards;
     animation: fade-in 1s 1.5s forwards;
@@ -157,6 +158,14 @@ body{
     -webkit-animation: fade-in .6s 1.8s forwards;
     -o-animation: fade-in .6s 1.8s forwards;
     animation: fade-in .6s 1.8s forwards;
+}
+.level-list{
+    font-size: 18px;
+    font-weight: bolder;
+}
+.level-item{
+    border-bottom: 1px dashed;
+    margin: .5em .4em;
 }
 
 .scene2{
