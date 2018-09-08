@@ -159,11 +159,11 @@ body{
     -o-animation: fade-in .6s 1.8s forwards;
     animation: fade-in .6s 1.8s forwards;
 }
-.level-list{
+.degree-list{
     font-size: 18px;
     font-weight: bolder;
 }
-.level-item{
+.degree-item{
     border-bottom: 1px dashed;
     margin: .5em .4em;
 }
